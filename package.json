@@ -1,0 +1,74 @@
+{
+  "name": "cognautic-desktop",
+  "version": "0.0.1",
+  "description": "An agentic AI desktop application by Cognautic",
+  "homepage": "https://cognautic.vercel.app",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "postinstall": "electron-builder install-app-deps",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "ai",
+    "agent"
+  ],
+  "author": "Cognautic <cognautic@gmail.com>",
+  "license": "Elastic-2.0",
+  "build": {
+    "appId": "com.cognautic.desktop",
+    "productName": "Cognautic",
+    "icon": "src/renderer/assets/icons/desktop-logo.png",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "copyright": "Copyright © 2025 Cognautic",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "publisherName": "Cognautic"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "pacman"
+      ],
+      "category": "Development",
+      "maintainer": "Cognautic <cognautic@gmail.com>"
+    },
+    "asarUnpack": [
+      "**/*.node"
+    ]
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.2",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "axios": "^1.6.2",
+    "cheerio": "^1.1.2",
+    "dotenv": "^17.3.1",
+    "monaco-editor": "^0.55.1",
+    "node-pty": "^1.1.0"
+  }
+}
