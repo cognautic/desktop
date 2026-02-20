@@ -324,7 +324,7 @@ function setupEventListeners() {
   document.querySelectorAll(".provider-tab").forEach((tab) => {
     tab.addEventListener("click", (event) => {
       const provider = event.target.dataset.provider;
-      selectProvider(provider);
+      selectProvider(provider, event);
     });
   });
 
@@ -784,7 +784,7 @@ function closeModelModal() {
   elements.modal.classList.remove("active");
 }
 
-async function selectProvider(provider) {
+async function selectProvider(provider, event) {
   // Update active tab
   document.querySelectorAll(".provider-tab").forEach((tab) => {
     tab.classList.remove("active");
@@ -1784,16 +1784,16 @@ function displayConversations() {
 
   // Add event listeners
   document.querySelectorAll(".conversation-item").forEach((item) => {
-    item.addEventListener("click", (e) => {
-      if (!e.target.closest(".delete-conversation")) {
+    item.addEventListener("click", (event) => {
+      if (!event.target.closest(".delete-conversation")) {
         loadConversation(item.dataset.conversationId);
       }
     });
   });
 
   document.querySelectorAll(".delete-conversation").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
       const conversationId = btn.dataset.conversationId;
       await deleteConversation(conversationId);
     });

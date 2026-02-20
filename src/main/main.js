@@ -220,7 +220,7 @@ ipcMain.handle("get-home-dir", () => {
 
 // Conversation Management
 ipcMain.handle("get-conversation-history", async (event, conversationId) => {
-  return await agentSystem.getConversation(conversationId);
+  return await agentSystem.getConversationHistory(conversationId);
 });
 
 ipcMain.handle("get-all-conversations", async () => {
