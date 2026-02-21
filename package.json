@@ -26,7 +26,7 @@
       "src/**/*",
       "package.json"
     ],
-    "copyright": "Copyright © 2025 Cognautic",
+    "copyright": "Copyright © 2026 Cognautic",
     "directories": {
       "output": "dist"
     },
@@ -46,9 +46,7 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb",
-        "pacman"
+        "AppImage"
       ],
       "category": "Development",
       "maintainer": "Cognautic <cognautic@gmail.com>"
