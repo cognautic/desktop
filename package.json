@@ -1,6 +1,6 @@
 {
   "name": "cognautic-desktop",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "An agentic AI desktop application by Cognautic",
   "homepage": "https://cognautic.vercel.app",
   "main": "src/main/main.js",
