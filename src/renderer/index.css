@@ -357,6 +357,62 @@ body {
     padding: 0;
 }
 
+.message-content pre.markdown-code-block {
+    position: relative;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+}
+
+.message-content pre.markdown-code-block[data-lang] {
+    padding-top: 30px;
+}
+
+.message-content .copy-code-btn {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.message-content .copy-code-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-light);
+    color: var(--text-primary);
+}
+
+.message-content pre.markdown-code-block[data-lang]::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 3px 7px;
+}
+
+.message-content pre.markdown-code-block code {
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.5;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
+}
+
 .text-response {
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -366,6 +422,7 @@ body {
     display: flex;
     gap: 6px;
     padding: 12px 0;
+    align-items: center;
 }
 
 .typing-dot {
@@ -382,6 +439,37 @@ body {
 
 .typing-dot:nth-child(3) {
     animation-delay: 0.4s;
+}
+
+.loader {
+    width: 22px;
+    height: 22px;
+    --c: no-repeat linear-gradient(#ffffff 0 0);
+    background: var(--c), var(--c), var(--c), var(--c);
+    background-size: 12px 12px;
+    animation: l5 1.5s infinite cubic-bezier(0.3, 1, 0, 1);
+}
+
+@keyframes l5 {
+    0% {
+        background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+    }
+
+    33% {
+        background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+        width: 32px;
+        height: 32px;
+    }
+
+    66% {
+        background-position: 100% 0, 100% 100%, 0 100%, 0 0;
+        width: 32px;
+        height: 32px;
+    }
+
+    100% {
+        background-position: 100% 0, 100% 100%, 0 100%, 0 0;
+    }
 }
 
 @keyframes typing {
@@ -893,11 +981,14 @@ input:checked+.slider:before {
 
 .tool-btn.approve {
     background: var(--accent-primary);
-    color: white;
+    color: #111111;
+    border: 1px solid #b8b8b8;
 }
 
 .tool-btn.approve:hover {
     background: var(--accent-hover);
+    color: #111111;
+    border-color: #ffffff;
 }
 
 .tool-btn.reject {
@@ -1444,6 +1535,7 @@ input:checked+.slider:before {
     align-items: center;
 }
 
+.terminal-stop-btn,
 .terminal-clear-btn,
 .terminal-toggle-btn {
     background: transparent;
@@ -1458,6 +1550,7 @@ input:checked+.slider:before {
     transition: var(--transition);
 }
 
+.terminal-stop-btn:hover,
 .terminal-clear-btn:hover,
 .terminal-toggle-btn:hover {
     background: var(--bg-tertiary);

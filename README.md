@@ -10,7 +10,7 @@ Cognautic Desktop is a professional-grade, high-performance development environm
 
 - **Integrated Professional Editor**: Powered by the Monaco Editor (the core of VS Code), providing high-performance code editing with full syntax highlighting and multi-file support.
 - **Native Terminal**: Real-time shell access via Xterm.js and `node-pty`, allowing AI agents to execute commands, run tests, and manage system dependencies securely.
-- **Multi-Provider AI Engine**: Connect seamlessly to Gemini, OpenAI, Claude, OpenRouter, and local Ollama instances.
+- **Multi-Provider AI Engine**: Connect seamlessly to Gemini, OpenAI, custom OpenAI-compatible APIs, Claude, OpenRouter, and local Ollama instances.
 - **Local-First Privacy**: Your configuration, conversation history, and project data stay on your machine. We never touch your data.
 - **Agentic Tool Safety**: 
   - **Confirmation Mode (Default)**: Every file modification or command execution requires your explicit approval.

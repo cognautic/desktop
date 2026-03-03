@@ -80,6 +80,8 @@ const elements = {
   apiKeyInputs: {
     google: document.getElementById("google-key"),
     openai: document.getElementById("openai-key"),
+    customopenai: document.getElementById("custom-openai-key"),
+    customopenai_base: document.getElementById("custom-openai-base-url"),
     anthropic: document.getElementById("anthropic-key"),
     openrouter: document.getElementById("openrouter-key"),
     together: document.getElementById("together-key"),
@@ -402,6 +404,33 @@ function setupEventListeners() {
     elements.messageInput.addEventListener("paste", handlePaste);
   }
 
+  // Copy button for markdown code blocks
+  if (elements.messagesContainer) {
+    elements.messagesContainer.addEventListener("click", async (e) => {
+      const copyBtn = e.target.closest(".copy-code-btn");
+      if (!copyBtn) return;
+
+      const codeBlock = copyBtn.closest(".markdown-code-block");
+      const codeEl = codeBlock?.querySelector("code");
+      if (!codeEl) return;
+
+      const codeText = codeEl.textContent || "";
+
+      try {
+        await navigator.clipboard.writeText(codeText);
+        copyBtn.textContent = "Copied";
+        setTimeout(() => {
+          copyBtn.textContent = "Copy";
+        }, 1200);
+      } catch (error) {
+        copyBtn.textContent = "Failed";
+        setTimeout(() => {
+          copyBtn.textContent = "Copy";
+        }, 1200);
+      }
+    });
+  }
+
   // Terminal Listeners (Moved from initTerminal to prevent duplicates)
   // Handle window resize
   window.addEventListener("resize", () => {
@@ -422,6 +451,15 @@ function setupEventListeners() {
       if (terminalInstance) {
         terminalInstance.clear();
       }
+    });
+  }
+
+  // Handle terminal stop button (sends Ctrl+C to active process)
+  const terminalStopBtn = document.getElementById("terminal-stop");
+  if (terminalStopBtn) {
+    terminalStopBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      window.electronAPI.writeToTerminal("\u0003");
     });
   }
 
@@ -700,6 +738,9 @@ async function loadApiKeys() {
     if (!state.apiKeys.ollama) {
       state.apiKeys.ollama = "http://127.0.0.1:11434";
     }
+    if (!state.apiKeys.customopenai_base) {
+      state.apiKeys.customopenai_base = "https://api.openai.com/v1";
+    }
 
     // Populate input fields
     Object.keys(state.apiKeys).forEach((provider) => {
@@ -712,6 +753,13 @@ async function loadApiKeys() {
     if (elements.apiKeyInputs.ollama && !elements.apiKeyInputs.ollama.value) {
       elements.apiKeyInputs.ollama.value = "http://127.0.0.1:11434";
     }
+    if (
+      elements.apiKeyInputs.customopenai_base &&
+      !elements.apiKeyInputs.customopenai_base.value
+    ) {
+      elements.apiKeyInputs.customopenai_base.value =
+        "https://api.openai.com/v1";
+    }
   } catch (error) {
     console.error("Failed to load API keys:", error);
   }
@@ -722,10 +770,13 @@ async function saveApiKey(provider) {
   let apiKey = input.value.trim();
 
   // Handle Ollama endpoint specially
-  if (provider === "ollama") {
+  if (provider === "ollama" || provider === "customopenai_base") {
     // If empty, use default
     if (!apiKey) {
-      apiKey = "http://127.0.0.1:11434";
+      apiKey =
+        provider === "ollama"
+          ? "http://127.0.0.1:11434"
+          : "https://api.openai.com/v1";
       input.value = apiKey;
     }
 
@@ -734,7 +785,9 @@ async function saveApiKey(provider) {
       new URL(apiKey);
     } catch (e) {
       showNotification(
-        "Please enter a valid URL (e.g., http://127.0.0.1:11434)",
+        provider === "ollama"
+          ? "Please enter a valid URL (e.g., http://127.0.0.1:11434)"
+          : "Please enter a valid URL (e.g., https://your-provider.example/v1)",
         "error",
       );
       return;
@@ -761,15 +814,19 @@ async function saveApiKey(provider) {
     }, 2000);
 
     const message =
-      provider === "ollama"
-        ? "Ollama endpoint saved successfully"
+      provider === "ollama" || provider === "customopenai_base"
+        ? provider === "ollama"
+          ? "Ollama endpoint saved successfully"
+          : "Custom OpenAI base URL saved successfully"
         : "API key saved successfully";
     showNotification(message, "success");
   } catch (error) {
     console.error(error);
     const message =
-      provider === "ollama"
-        ? "Failed to save Ollama endpoint"
+      provider === "ollama" || provider === "customopenai_base"
+        ? provider === "ollama"
+          ? "Failed to save Ollama endpoint"
+          : "Failed to save custom OpenAI base URL"
         : "Failed to save API key";
     showNotification(message, "error");
   }
@@ -1116,12 +1173,6 @@ function renderToolCallsInline(toolCalls) {
   const contentEl = lastMessage.querySelector(".message-content");
   if (!contentEl) return;
 
-  // Remove typing indicator if present
-  const typingIndicator = contentEl.querySelector(".typing-indicator");
-  if (typingIndicator) {
-    typingIndicator.remove();
-  }
-
   // Render each tool call
   for (const toolCall of toolCalls) {
     const toolId = toolCall.id || `tool-${Date.now()}_${Math.random()}`;
@@ -1390,6 +1441,7 @@ async function executePendingTools() {
         toolUi.querySelector(".tool-status-badge").className =
           "tool-status-badge completed";
         toolUi.querySelector(".tool-status-badge").textContent = "Completed";
+        appendToolOutput(toolUi, output, toolName);
 
         toolOutputs.push({
           tool_call_id: toolCall.id,
@@ -1433,6 +1485,7 @@ async function executePendingTools() {
           toolUi.querySelector(".tool-status-badge").className =
             "tool-status-badge completed";
           toolUi.querySelector(".tool-status-badge").textContent = "Completed";
+          appendToolOutput(toolUi, output, decision.toolCall.function.name);
         }
 
         toolOutputs.push({
@@ -1525,6 +1578,77 @@ async function runTool(name, args) {
   }
 }
 
+function renderToolOutputHtml(output, toolName = "") {
+  let formattedContent = "";
+  if (typeof output === "string") {
+    formattedContent = output;
+  } else {
+    try {
+      formattedContent = JSON.stringify(output, null, 2);
+    } catch (e) {
+      formattedContent = String(output);
+    }
+  }
+
+  const isCommandOutput = toolName === "execute_command";
+  const stdout = output && typeof output === "object" ? output.stdout || "" : "";
+  const stderr = output && typeof output === "object" ? output.stderr || "" : "";
+  const hasTerminalOutput = Boolean(stdout || stderr);
+
+  if (isCommandOutput && hasTerminalOutput) {
+    const safeStdout = escapeHtml(stdout);
+    const safeStderr = escapeHtml(stderr);
+    const commandOutputHtml = `
+      <div class="tool-output-header">
+        Output
+        ${output && output.pid && output.background
+          ? `
+          <button class="terminate-btn" onclick="terminateProcess(${output.pid})" title="Terminate process">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            Stop PID ${output.pid}
+          </button>
+          `
+          : ""}
+      </div>
+      ${stdout ? `<pre>${safeStdout}</pre>` : ""}
+      ${stderr ? `<pre style="color:#fca5a5;border-top:1px solid var(--border-color);margin-top:8px;padding-top:8px;">${safeStderr}</pre>` : ""}
+    `;
+    return commandOutputHtml;
+  }
+
+  let outputHtml = `<div class="tool-output-header">Output</div><pre>${escapeHtml(formattedContent)}</pre>`;
+  if (output && typeof output === "object" && output.pid && output.background) {
+    outputHtml = `
+      <div class="tool-output-header">
+        Output
+        <button class="terminate-btn" onclick="terminateProcess(${output.pid})" title="Terminate process">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+          Stop PID ${output.pid}
+        </button>
+      </div>
+      <pre>${escapeHtml(formattedContent)}</pre>
+    `;
+  }
+  return outputHtml;
+}
+
+function appendToolOutput(toolUi, output, toolName = "") {
+  if (!toolUi || toolUi.querySelector(".tool-output-section")) return;
+
+  const outputDiv = document.createElement("div");
+  outputDiv.className = "tool-output-section";
+  outputDiv.innerHTML = renderToolOutputHtml(output, toolName);
+  toolUi.appendChild(outputDiv);
+}
+
 function addMessage(
   role,
   content,
@@ -1543,9 +1667,10 @@ function addMessage(
     const toolUi = document.getElementById(`tool-ui-${toolCallId}`);
     if (toolUi) {
       let formattedContent = "";
+      let parsedOutput = null;
       try {
-        const json = JSON.parse(content);
-        formattedContent = JSON.stringify(json, null, 2);
+        parsedOutput = JSON.parse(content);
+        formattedContent = JSON.stringify(parsedOutput, null, 2);
       } catch (e) {
         formattedContent = content;
       }
@@ -1555,31 +1680,10 @@ function addMessage(
         const outputDiv = document.createElement("div");
         outputDiv.className = "tool-output-section";
 
-        // Parse the output to check if it's a background command with PID
-        let outputHtml = `<div class="tool-output-header">Output</div><pre>${formattedContent}</pre>`;
-
-        try {
-          const json = JSON.parse(content);
-          if (json.pid && json.background) {
-            // This is a background command - add terminate button
-            outputHtml = `
-              <div class="tool-output-header">
-                Output
-                <button class="terminate-btn" onclick="terminateProcess(${json.pid})" title="Terminate process">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="15" y1="9" x2="9" y2="15"></line>
-                    <line x1="9" y1="9" x2="15" y2="15"></line>
-                  </svg>
-                  Terminate PID ${json.pid}
-                </button>
-              </div>
-              <pre>${formattedContent}</pre>
-            `;
-          }
-        } catch (e) {
-          // Not JSON or doesn't have PID, use default
-        }
+        let outputHtml = renderToolOutputHtml(
+          parsedOutput || formattedContent,
+          "execute_command",
+        );
 
         outputDiv.innerHTML = outputHtml;
         // Append to toolUi
@@ -1626,7 +1730,7 @@ function addMessage(
     (!toolCalls || toolCalls.length === 0)
   ) {
     contentHtml =
-      '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+      '<div class="typing-indicator"><div class="loader" aria-label="AI is streaming"></div></div>';
   } else if (role === "tool") {
     // Format tool output (usually JSON)
     try {
@@ -1712,14 +1816,40 @@ function addMessage(
   return messageId;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function formatContent(content) {
   if (!content) return "";
 
-  // Simple markdown-like formatting
-  let formatted = content
-    .replace(/\n/g, "<br>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/```([\s\S]+?)```/g, "<pre><code>$1</code></pre>");
+  const text = String(content);
+  const codeBlocks = [];
+
+  // Render fenced code blocks first, including optional language identifier.
+  let formatted = text.replace(/```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g, (_, rawLang, rawCode) => {
+    const lang = (rawLang || "").trim().toLowerCase();
+    const safeCode = escapeHtml(rawCode.replace(/\n$/, ""));
+    const codeBlock = `<pre class="markdown-code-block"${lang ? ` data-lang="${escapeHtml(lang)}"` : ""}><button class="copy-code-btn" type="button">Copy</button><code>${safeCode}</code></pre>`;
+    const token = `__CODE_BLOCK_${codeBlocks.length}__`;
+    codeBlocks.push(codeBlock);
+    return token;
+  });
+
+  // Escape remaining text, then apply inline code and line breaks.
+  formatted = escapeHtml(formatted)
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\n/g, "<br>");
+
+  // Restore code blocks.
+  codeBlocks.forEach((block, index) => {
+    formatted = formatted.replace(`__CODE_BLOCK_${index}__`, block);
+  });
 
   return formatted;
 }
@@ -2577,14 +2707,18 @@ async function initTerminal() {
 // ===== Process Management =====
 window.terminateProcess = async function (pid) {
   try {
-    const result = await window.electronAPI.executeTool('kill_process', { pid });
+    const result = await window.electronAPI.executeTool(
+      "kill_process",
+      { pid: String(pid) },
+      state.workingDirectory,
+    );
     if (result.success) {
-      showNotification(`Process ${pid} terminated successfully`, 'success');
+      showNotification(`Process ${pid} terminated successfully`, "success");
     } else {
-      showNotification(`Failed to terminate process: ${result.error}`, 'error');
+      showNotification(`Failed to terminate process: ${result.error}`, "error");
     }
   } catch (error) {
-    showNotification(`Error terminating process: ${error.message}`, 'error');
+    showNotification(`Error terminating process: ${error.message}`, "error");
   }
 };
 

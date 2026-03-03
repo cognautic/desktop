@@ -154,6 +154,9 @@ class AgentSystem {
                 case 'openai':
                     models = await this.fetchOpenAIModels(apiKey);
                     break;
+                case 'customopenai':
+                    models = await this.fetchCustomOpenAIModels(apiKey);
+                    break;
                 case 'anthropic':
                     models = await this.fetchAnthropicModels(apiKey);
                     break;
@@ -203,6 +206,26 @@ class AgentSystem {
                 name: m.id,
                 provider: 'openai',
                 supportsTools: m.id.includes('gpt-4') || m.id.includes('gpt-3.5') // Standard OpenAI models support tools
+            }));
+    }
+
+    getCustomOpenAIBaseUrl() {
+        const rawBase = this.apiKeys.customopenai_base || 'https://api.openai.com/v1';
+        return rawBase.replace(/\/+$/, '');
+    }
+
+    async fetchCustomOpenAIModels(apiKey) {
+        const baseUrl = this.getCustomOpenAIBaseUrl();
+        const response = await axios.get(`${baseUrl}/models`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+
+        return (response.data.data || [])
+            .map(m => ({
+                id: m.id,
+                name: m.id,
+                provider: 'customopenai',
+                supportsTools: true
             }));
     }
 
@@ -400,6 +423,9 @@ class AgentSystem {
                 break;
             case 'openai':
                 await this.streamOpenAI(apiKey, model, messages, chunkWrapper, onError, completeWrapper);
+                break;
+            case 'customopenai':
+                await this.streamCustomOpenAI(apiKey, model, messages, chunkWrapper, onError, completeWrapper);
                 break;
             case 'anthropic':
                 await this.streamAnthropic(apiKey, model, messages, chunkWrapper, onError, completeWrapper);
@@ -656,6 +682,64 @@ class AgentSystem {
             const detailedError = await this.getDetailedError(error);
             console.error('Anthropic stream error detail:', detailedError);
             onError(`Anthropic Error: ${detailedError}`);
+        }
+    }
+
+    async streamCustomOpenAI(apiKey, model, messages, onChunk, onError, onComplete) {
+        const baseUrl = this.getCustomOpenAIBaseUrl();
+        try {
+            const customMessages = [...messages];
+            customMessages.unshift({ role: 'system', content: SYSTEM_PROMPT });
+
+            const response = await axios.post(
+                `${baseUrl}/chat/completions`,
+                {
+                    model,
+                    messages: customMessages,
+                    stream: true,
+                    tools: this.getToolDefinitions()
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    responseType: 'stream'
+                }
+            );
+
+            response.data.on('data', (chunk) => {
+                const lines = chunk.toString().split('\n').filter(line => line.trim() !== '');
+                for (const line of lines) {
+                    if (line.includes('[DONE]')) continue;
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const json = JSON.parse(line.substring(6));
+                            const content = json.choices[0]?.delta?.content || '';
+                            if (content) {
+                                onChunk({ type: 'content', content });
+                            }
+
+                            const toolCalls = json.choices[0]?.delta?.tool_calls;
+                            if (toolCalls) {
+                                onChunk({ type: 'tool_call', toolCalls });
+                            }
+                        } catch (e) {
+                            // Skip invalid JSON
+                        }
+                    }
+                }
+            });
+
+            response.data.on('end', onComplete);
+            response.data.on('error', (error) => {
+                console.error('Custom OpenAI stream error:', error);
+                onError(`Custom OpenAI Stream Error: ${error.message}`);
+            });
+        } catch (error) {
+            const detailedError = await this.getDetailedError(error);
+            console.error('Custom OpenAI API error detail:', detailedError);
+            onError(`Custom OpenAI Error: ${detailedError}`);
         }
     }
 
@@ -1530,11 +1614,24 @@ class AgentSystem {
     async executeCommand(command, cwd, background = false) {
         try {
             console.log('Executing command:', command, 'in CWD:', cwd, 'Background:', background);
-            const options = cwd ? { cwd, shell: true } : { shell: true };
+            const workingDir = cwd || process.cwd();
+            const isWindows = process.platform === 'win32';
+            const shell = isWindows
+                ? (process.env.COMSPEC || 'cmd.exe')
+                : (process.env.SHELL || '/bin/bash');
 
             // Function to handle process logic
             const runProcess = (isBackground) => {
-                const subprocess = spawn(command, { ...options, detached: isBackground });
+                const spawnArgs = isWindows
+                    ? ['/d', '/s', '/c', command]
+                    : ['-lc', command];
+
+                const subprocess = spawn(shell, spawnArgs, {
+                    cwd: workingDir,
+                    env: process.env,
+                    detached: isBackground,
+                    stdio: 'pipe'
+                });
                 const pid = subprocess.pid;
                 this.runningProcesses.set(pid, subprocess);
                 if (isBackground) subprocess.unref();
@@ -1545,14 +1642,14 @@ class AgentSystem {
 
                 subprocess.stdout.on('data', (data) => {
                     const str = data.toString();
+                    stdout += str;
                     if (isBackground) console.log(`[PID ${pid}] stdout: ${str}`);
-                    else stdout += str;
                 });
 
                 subprocess.stderr.on('data', (data) => {
                     const str = data.toString();
+                    stderr += str;
                     if (isBackground) console.error(`[PID ${pid}] stderr: ${str}`);
-                    else stderr += str;
                 });
 
                 subprocess.on('close', (code) => {
@@ -1565,13 +1662,20 @@ class AgentSystem {
             };
 
             if (background) {
-                const { pid } = runProcess(true);
-                return {
-                    success: true,
-                    message: `Command started in background with PID ${pid}`,
-                    pid: pid,
-                    background: true
-                };
+                const { pid, getOutput } = runProcess(true);
+                return await new Promise((resolve) => {
+                    setTimeout(() => {
+                        const { stdout, stderr } = getOutput();
+                        resolve({
+                            success: true,
+                            message: `Command started in background with PID ${pid}`,
+                            pid: pid,
+                            background: true,
+                            stdout,
+                            stderr
+                        });
+                    }, 1200);
+                });
             } else {
                 // Foreground with timeout
                 return new Promise((resolve) => {
