@@ -26,16 +26,31 @@
       "src/**/*",
       "package.json"
     ],
-    "copyright": "Copyright © 2026 Cognautic",
+    "copyright": "ातार",
     "directories": {
       "output": "dist"
     },
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "publish": null,
     "win": {
       "target": [
-        "nsis",
-        "zip"
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
       ],
       "publisherName": "Cognautic"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
     },
     "mac": {
       "target": [
@@ -49,11 +64,8 @@
         "AppImage"
       ],
       "category": "Development",
-      "maintainer": "Cognautic <cognautic@gmail.com>"
-    },
-    "asarUnpack": [
-      "**/*.node"
-    ]
+      "maintainer": "Cognautic <cognauticCLUD@gmail.com>"
+    }
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.2",
